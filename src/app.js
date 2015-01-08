@@ -1,71 +1,67 @@
-/**
- * Welcome to Pebble.js!
- *
- * This is where you write your app.
- */
+var UI = require('ui'),
+    ajax = require('ajax'),
+    Vibe = require('ui/vibe'),
+    mainWindow;
 
-var UI = require('ui');
-var Vector2 = require('vector2');
-
-var main = new UI.Card({
-  title: 'RESTroom',
-  subtitle: 'Loading...'
-});
-
-main.show();
-
-var ws = new WebSocket('ws://secondcity.nerderylabs.com/signalr/connect?transport=webSockets&clientProtocol=1.4&connectionToken=5Oe%2B4EZPMIDOwMQ9ru6aGKRfjNNKt3sc8Ei0XVMRSJmUH3XwXnTWHavUfCT3bFAtN6eHK%2ByFksGraCn7BL4a6KaiREQ7fkyedXkB%2BbFDYifqyt93YI%2Fjk0H2hTAhzNP3&connectionData=%5B%7B%22name%22%3A%22bathroomhub%22%7D%5D&tid=3');
-
-ws.onopen = function() {
-    console.log("Web Socket Opened");
+var LOCATION = {
+  UNKNOWN: 0,
+  BATHROOM: 1,
+  CONFERENCE_ROOM: 2
 };
 
-ws.onmessage = function(evt) {
-    console.log("onmessage", evt); 
-  var loadScreen = new UI.Card({
-      title: 'Loaded.',
-    body: evt.data
-    });
-  loadScreen.show();
-};
-
-main.on('click', 'up', function(e) {
-  var menu = new UI.Menu({
+function init() {
+  mainWindow = new UI.Menu({
     sections: [{
-      items: [{
-        title: 'Pebble.js',
-        icon: 'images/menu_icon.png',
-        subtitle: 'Can do Menus'
-      }, {
-        title: 'Second Item',
-        subtitle: 'Subtitle Text'
-      }]
+      title: "Restroom Status"
     }]
   });
-  menu.on('select', function(e) {
-    console.log('Selected item #' + e.itemIndex + ' of section #' + e.sectionIndex);
-    console.log('The item is titled "' + e.item.title + '"');
-  });
-  menu.show();
-});
+  
+  mainWindow.show();
+  
+  bindEvents();
+  loadData();
+}
 
-main.on('click', 'select', function(e) {
-  var wind = new UI.Window();
-  var textfield = new UI.Text({
-    position: new Vector2(0, 50),
-    size: new Vector2(144, 30),
-    font: 'gothic-24-bold',
-    text: 'Text Anywhere!',
-    textAlign: 'center'
+function bindEvents() {
+  mainWindow.on('select', function() {
+    loadData(function() {
+      Vibe.vibrate('short');
+    });
   });
-  wind.add(textfield);
-  wind.show();
-});
+}
 
-main.on('click', 'down', function(e) {
-  var card = new UI.Card();
-  card.title('A Card');
-  card.subtitle('Is a Window');
-  card.body('The simplest window type in Pebble.js.');
-  card.show();
-});
+function loadData(callback) {
+  ajax({
+    url: "http://secondcity.nerderylabs.com/api/Locations",
+    type: "json"
+  }, function(data) {
+    var items = [];
+    
+    for (var i = 0; i < data.length; i++) {
+      if (data[i].Type == LOCATION.BATHROOM) {
+        items[i] = {
+          title: data[i].Id,
+          subtitle: getStatus(data[i].IsAvailable, data[i].DataIsStale)
+        };
+      }
+    }
+    
+    mainWindow.items(0, items);
+    if (callback) {
+      callback();
+    }
+  }, function(error) {
+    console.log("Error");
+  });
+}
+
+function getStatus(isAvailable, isStale) {
+  if (isStale) {
+    return "Connection Unavialable";
+  } else if (isAvailable) {
+    return "Available";
+  }
+  return "Unavailable";
+}
+
+init();
